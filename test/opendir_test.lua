@@ -4,10 +4,18 @@ local opendir = require('opendir')
 
 function testcase.opendir()
     -- test that get directory stream
-    local dir, err, eno = opendir('./testdir')
+    local dir, err, eno = opendir('./testdir/bardir')
     assert(dir, err)
     assert.is_nil(eno)
     assert.match(tostring(dir), 'dir*: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from symlink
+    dir, err, eno = opendir('./testdir_symlink/bardir')
+    assert(dir, err)
+    assert.is_nil(eno)
+    assert.match(tostring(dir), 'dir*: ')
+    assert(dir:closedir())
 
     -- test that return error
     dir, err, eno = opendir('./unknowndir')
@@ -18,6 +26,25 @@ function testcase.opendir()
     -- test that throws an error
     err = assert.throws(opendir, 1)
     assert.match(err, '#1 .+ [(]string expected', false)
+end
+
+function testcase.opendir_nofollow()
+    -- test that get directory stream
+    local dir, err, eno = opendir('./testdir', false)
+    assert(dir, err)
+    assert.is_nil(eno)
+    assert.match(tostring(dir), 'dir*: ')
+    assert(dir:closedir())
+
+    -- test that cannot get directory stream from symlink
+    dir, err, eno = opendir('./testdir_symlink/bardir', false)
+    assert.is_nil(dir)
+    assert.is_string(err)
+    assert.equal(errno[eno], errno.ENOTDIR)
+
+    -- test that throws an error
+    err = assert.throws(opendir, './testdir', {})
+    assert.match(err, '#2 .+ [(]boolean expected', false)
 end
 
 function testcase.closedir()

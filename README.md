@@ -27,13 +27,14 @@ dir:closedir()
 ```
 
 
-## dir, err, errno = opendir( name )
+## dir, err, errno = opendir( name [, follow_symlink] )
 
 open a directory stream corresponding to the directory `name`.
 
 **Parameters**
 
 - `name:string`: directory name.
+- `follow_symlink:boolean`: follow symbolic links. (default: `true`)
 
 **Returns**
 
