@@ -1,5 +1,5 @@
 local testcase = require('testcase')
-local errno = require('error').errno
+local errno = require('errno')
 local opendir = require('opendir')
 
 function testcase.opendir()

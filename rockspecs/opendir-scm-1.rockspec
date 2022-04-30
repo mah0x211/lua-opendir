@@ -1,4 +1,3 @@
-rockspec_format = '3.0'
 package = 'opendir'
 version = 'scm-1'
 source = {
@@ -15,10 +14,17 @@ dependencies = {
     'lauxhlib >= 0.1.0',
 }
 build = {
-    type = 'builtin',
-    modules = {
-        opendir = {
-            sources = { 'src/opendir.c' }
-        },
+    type = 'make',
+    build_variables = {
+        LIB_EXTENSION   = "$(LIB_EXTENSION)",
+        CFLAGS          = "$(CFLAGS)",
+        WARNINGS        = "-Wall -Wno-trigraphs -Wmissing-field-initializers -Wreturn-type -Wmissing-braces -Wparentheses -Wno-switch -Wunused-function -Wunused-label -Wunused-parameter -Wunused-variable -Wunused-value -Wuninitialized -Wunknown-pragmas -Wshadow -Wsign-compare",
+        CPPFLAGS        = "-I$(LUA_INCDIR)",
+        LDFLAGS         = "$(LIBFLAG)",
+        OPENDIR_COVERAGE = "$(OPENDIR_COVERAGE)",
+    },
+    install_variables = {
+        LIB_EXTENSION   = "$(LIB_EXTENSION)",
+        INST_LIBDIR     = "$(LIBDIR)",
     }
 }
