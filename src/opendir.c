@@ -23,11 +23,12 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <lauxhlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+// lua
+#include <lua_errno.h>
 
 #define DIR_MT "dir*"
 
@@ -42,9 +43,9 @@ static int rewinddir_lua(lua_State *L)
     }
     // dir has already been closed
     lua_pushboolean(L, 0);
-    lua_pushstring(L, strerror(EBADF));
-    lua_pushinteger(L, EBADF);
-    return 3;
+    errno = EBADF;
+    lua_errno_new(L, errno, "rewinddir");
+    return 2;
 }
 
 static int readdir_lua(lua_State *L)
@@ -63,9 +64,8 @@ static int readdir_lua(lua_State *L)
     lua_pushnil(L);
     if (errno) {
         // got error
-        lua_pushstring(L, strerror(errno));
-        lua_pushinteger(L, errno);
-        return 3;
+        lua_errno_new(L, errno, "readdir");
+        return 2;
     }
     return 1;
 }
@@ -80,9 +80,8 @@ static int closedir_lua(lua_State *L)
         *dir = NULL;
         if (closedir(dirp) != 0) {
             lua_pushboolean(L, 0);
-            lua_pushstring(L, strerror(errno));
-            lua_pushinteger(L, errno);
-            return 3;
+            lua_errno_new(L, errno, "closedir");
+            return 2;
         }
     }
     lua_pushboolean(L, 1);
@@ -311,9 +310,8 @@ static int opendir_lua(lua_State *L)
     if (follow_symlink ? opendir_follow(L, path) :
                          opendir_nofollow(L, (char *)path, len)) {
         lua_pushnil(L);
-        lua_pushfstring(L, "%s: %s", path, strerror(errno));
-        lua_pushinteger(L, errno);
-        return 3;
+        lua_errno_new(L, errno, "opendir");
+        return 2;
     }
     return 1;
 }
@@ -321,6 +319,8 @@ static int opendir_lua(lua_State *L)
 LUALIB_API int luaopen_opendir(lua_State *L)
 {
     long pathmax = pathconf(".", _PC_PATH_MAX);
+
+    lua_errno_loadlib(L);
 
     // set the maximum number of bytes in a pathname
     if (pathmax != -1) {

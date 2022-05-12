@@ -27,8 +27,12 @@ end
 dir:closedir()
 ```
 
+## Error Handling
 
-## dir, err, errno = opendir( name [, follow_symlink] )
+the following functions return the `error` object created by https://github.com/mah0x211/lua-errno module.
+
+
+## dir, err = opendir( name [, follow_symlink] )
 
 open a directory stream corresponding to the directory `name`.
 
@@ -40,19 +44,17 @@ open a directory stream corresponding to the directory `name`.
 **Returns**
 
 - `dir:dir*`: a directory stream.
-- `err:string`: error message on failure.
-- `errno:integer`: error number.
+- `err:error`: error object on failure.
 
 
-## ok, err, errno = dir:closedir()
+## ok, err = dir:closedir()
 
 close a directory stream.
 
 **Returns**
 
 - `ok:boolean`: `true` on success.
-- `err:string`: error message on failure.
-- `errno:integer`: error number.
+- `err:error`: error object on failure.
 
 
 **NOTE** 
@@ -67,18 +69,16 @@ get the next directory entry.
 **Returns**
 
 - `entry:string`: a directory entry.
-- `err:string`: error message on failure.
-- `errno:integer`: error number.
+- `err:error`: error object on failure.
 
 
-## ok, err, errno = dir:rewinddir()
+## ok, err = dir:rewinddir()
 
 reset the read location to the beginning of a directory.
 
 **Returns**
 
 - `ok:boolean`: `true` on success.
-- `err:string`: error message on failure.
-- `errno:integer`: error number.
+- `err:error`: error object on failure.
 
 

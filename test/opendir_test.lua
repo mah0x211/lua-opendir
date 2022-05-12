@@ -1,72 +1,79 @@
-local testcase = require('testcase')
+local assert = require('assert')
 local errno = require('errno')
 local opendir = require('opendir')
 
-function testcase.opendir()
+local function test_opendir()
     -- test that get directory stream
-    local dir, err, eno = opendir('./testdir/bardir')
-    assert(dir, err)
-    assert.is_nil(eno)
+    local dir, err = assert(opendir('./test/testdir/bardir'))
+    assert.is_nil(err)
     assert.match(tostring(dir), 'dir*: ')
     assert(dir:closedir())
 
     -- test that get directory stream from symlink
-    dir, err, eno = opendir('./testdir_symlink/bardir')
-    assert(dir, err)
-    assert.is_nil(eno)
+    dir, err = assert(opendir('./test/testdir_symlink/bardir'))
+    assert.is_nil(err)
     assert.match(tostring(dir), 'dir*: ')
     assert(dir:closedir())
 
     -- test that return error
-    dir, err, eno = opendir('./unknowndir')
+    dir, err = opendir('./unknowndir')
     assert.is_nil(dir)
-    assert.match(err, 'unknowndir.+ No .+ directory', false)
-    assert.equal(errno[eno], errno.ENOENT)
+    assert.equal(err.type, errno.ENOENT)
 
     -- test that throws an error
     err = assert.throws(opendir, 1)
     assert.match(err, '#1 .+ [(]string expected', false)
 end
 
-function testcase.opendir_nofollow()
+local function test_opendir_nofollow()
     -- test that get directory stream
-    local dir, err, eno = opendir('./testdir', false)
+    local dir, err = assert(opendir('./test/testdir', false))
     assert(dir, err)
-    assert.is_nil(eno)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir*: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream
+    dir, err = assert(opendir('./test/testdir/foo/../bar/..', false))
+    assert(dir, err)
+    assert.is_nil(err)
     assert.match(tostring(dir), 'dir*: ')
     assert(dir:closedir())
 
     -- test that cannot get directory stream from symlink
-    dir, err, eno = opendir('./testdir_symlink/bardir', false)
+    dir, err = opendir('./test/testdir_symlink/bardir', false)
     assert.is_nil(dir)
-    assert.is_string(err)
-    assert.equal(errno[eno], errno.ENOTDIR)
+    assert.equal(err.type, errno.ENOTDIR)
+
+    -- test that return ENAMETOOLONG error
+    dir, err = opendir(string.rep('x', 4096), false)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.ENAMETOOLONG)
 
     -- test that throws an error
-    err = assert.throws(opendir, './testdir', {})
+    err = assert.throws(opendir, './test/testdir', {})
     assert.match(err, '#2 .+ [(]boolean expected', false)
 end
 
-function testcase.closedir()
-    local dir = assert(opendir('./testdir'))
+local function test_closedir()
+    local dir = assert(opendir('./test/testdir'))
 
     -- test that closedir can be called more than once
     assert(dir:closedir())
     assert(dir:closedir())
 end
 
-function testcase.readdir()
-    local dir = assert(opendir('./testdir'))
+local function test_readdir()
+    local dir = assert(opendir('./test/testdir'))
 
     -- test that return directory entry
     local entries = {}
-    local entry, err, eno = dir:readdir()
+    local entry, err = assert(dir:readdir())
     while entry do
         entries[entry] = true
         entry = dir:readdir()
     end
     assert(not err, err)
-    assert.is_nil(eno)
     assert.equal(entries, {
         ['.'] = true,
         ['..'] = true,
@@ -79,14 +86,13 @@ function testcase.readdir()
 
     -- test that return error after closedir
     assert(dir:closedir())
-    entry, err, eno = dir:readdir()
+    entry, err = dir:readdir()
     assert.is_nil(entry)
-    assert.is_string(err)
-    assert.equal(errno[eno], errno.EBADF)
+    assert.equal(err.type, errno.EBADF)
 end
 
-function testcase.rewinddir()
-    local dir = assert(opendir('./testdir'))
+local function test_rewinddir()
+    local dir = assert(opendir('./test/testdir'))
     local entries = {}
     local entry = dir:readdir()
     while entry do
@@ -117,9 +123,17 @@ function testcase.rewinddir()
 
     -- test that return error after closedir
     assert(dir:closedir())
-    local ok, err, eno = dir:rewinddir()
+    local ok, err = dir:rewinddir()
     assert.is_false(ok)
-    assert.is_string(err)
-    assert.equal(errno[eno], errno.EBADF)
+    assert.equal(err.type, errno.EBADF)
 end
 
+for _, fn in ipairs({
+    test_opendir,
+    test_opendir_nofollow,
+    test_closedir,
+    test_readdir,
+    test_rewinddir,
+}) do
+    assert(pcall(fn))
+end
