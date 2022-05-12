@@ -62,7 +62,7 @@ close a directory stream.
 the directory stream will be closed automatically on GC.
 
 
-## entry, err, errno = dir:readdir()
+## entry, err = dir:readdir()
 
 get the next directory entry.
 
