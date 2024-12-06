@@ -6,13 +6,13 @@ local function test_opendir()
     -- test that get directory stream
     local dir, err = assert(opendir('./test/testdir/bardir'))
     assert.is_nil(err)
-    assert.match(tostring(dir), 'dir*: ')
+    assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
     -- test that get directory stream from symlink
     dir, err = assert(opendir('./test/testdir_symlink/bardir'))
     assert.is_nil(err)
-    assert.match(tostring(dir), 'dir*: ')
+    assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
     -- test that return error
@@ -30,14 +30,14 @@ local function test_opendir_nofollow()
     local dir, err = assert(opendir('./test/testdir', false))
     assert(dir, err)
     assert.is_nil(err)
-    assert.match(tostring(dir), 'dir*: ')
+    assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
     -- test that get directory stream
     dir, err = assert(opendir('./test/testdir/foo/../bar/..', false))
     assert(dir, err)
     assert.is_nil(err)
-    assert.match(tostring(dir), 'dir*: ')
+    assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
     -- test that cannot get directory stream from symlink

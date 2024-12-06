@@ -30,7 +30,7 @@
 // lua
 #include <lua_errno.h>
 
-#define DIR_MT "dir*"
+#define DIR_MT "dir"
 
 static int rewinddir_lua(lua_State *L)
 {
