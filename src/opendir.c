@@ -286,6 +286,7 @@ static int opendir_nofollow(lua_State *L, char *path, size_t len)
             lauxh_setmetatable(L, DIR_MT);
             return 0;
         }
+        close(fd);
     }
     return -1;
 }
