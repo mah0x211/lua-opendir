@@ -222,21 +222,19 @@ ADD_SEGMENT:
     return 0;
 }
 
-static size_t PATHBUF_SIZ = PATH_MAX;
-static char *PATHBUF      = NULL;
-
-static int opendir_nofollow(lua_State *L, char *path, size_t len)
+static int opendir_nofollow(lua_State *L, char *path, size_t len, char *pathbuf,
+                            size_t pathbuf_siz)
 {
     int fd  = -1;
     int top = 0;
 
     // check path length
-    if (len > PATHBUF_SIZ) {
+    if (len > pathbuf_siz) {
         errno = ENAMETOOLONG;
         return -1;
     }
     // normalize a path
-    path      = memcpy(PATHBUF, path, len);
+    path      = memcpy(pathbuf, path, len);
     path[len] = 0;
     lua_settop(L, 0);
     if (normalize(L, path, len) != 0) {
@@ -308,9 +306,12 @@ static int opendir_lua(lua_State *L)
     size_t len         = 0;
     const char *path   = lauxh_checklstring(L, 1, &len);
     int follow_symlink = lauxh_optboolean(L, 2, 1);
+    size_t pathbuf_siz = (size_t)lua_tointeger(L, lua_upvalueindex(1));
+    char *pathbuf      = lua_touserdata(L, lua_upvalueindex(2));
 
-    if (follow_symlink ? opendir_follow(L, path) :
-                         opendir_nofollow(L, (char *)path, len)) {
+    if (follow_symlink ?
+            opendir_follow(L, path) :
+            opendir_nofollow(L, (char *)path, len, pathbuf, pathbuf_siz)) {
         lua_pushnil(L);
         lua_errno_new(L, errno, "opendir");
         return 2;
@@ -320,18 +321,10 @@ static int opendir_lua(lua_State *L)
 
 LUALIB_API int luaopen_opendir(lua_State *L)
 {
-    long pathmax = pathconf(".", _PC_PATH_MAX);
+    long pathmax       = pathconf(".", _PC_PATH_MAX);
+    size_t pathbuf_siz = (pathmax != -1) ? (size_t)pathmax : PATH_MAX;
 
     lua_errno_loadlib(L);
-
-    // set the maximum number of bytes in a pathname
-    if (pathmax != -1) {
-        PATHBUF_SIZ = pathmax;
-    }
-    // allocate the buffer for getcwd
-    PATHBUF = lua_newuserdata(L, PATHBUF_SIZ + 1);
-    // holds until the state closes
-    luaL_ref(L, LUA_REGISTRYINDEX);
 
     // create metatable
     if (luaL_newmetatable(L, DIR_MT)) {
@@ -362,6 +355,10 @@ LUALIB_API int luaopen_opendir(lua_State *L)
         lua_pop(L, 1);
     }
 
-    lua_pushcfunction(L, opendir_lua);
+    // upvalue 1: path buffer size
+    lua_pushinteger(L, (lua_Integer)pathbuf_siz);
+    // upvalue 2: path buffer (held by closure until state closes)
+    lua_newuserdata(L, pathbuf_siz + 1);
+    lua_pushcclosure(L, opendir_lua, 2);
     return 1;
 }
