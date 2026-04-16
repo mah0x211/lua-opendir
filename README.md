@@ -32,7 +32,7 @@ dir:closedir()
 the following functions return the `error` object created by https://github.com/mah0x211/lua-errno module.
 
 
-## dir, err = opendir( name [, follow_symlink] )
+## dir, err = opendir( name [, follow_symlink [, toctou]] )
 
 open a directory stream corresponding to the directory `name`.
 
@@ -40,6 +40,20 @@ open a directory stream corresponding to the directory `name`.
 
 - `name:string`: directory name.
 - `follow_symlink:boolean`: follow symbolic links. (default: `true`)
+  - `true`: symbolic links are followed at all path components.
+  - `false`: symbolic link at the final path component is rejected (`ENOTDIR`). Intermediate symbolic links are still followed (POSIX `O_NOFOLLOW` semantics).
+- `toctou:boolean`: enable TOCTOU-safe traversal via `openat(2)`. (default: `false`)
+  - When `true`, each path segment is opened with `openat(2)` relative to the previously opened directory file descriptor, eliminating the race window between path resolution steps.
+  - When `follow_symlink=false`, `O_NOFOLLOW` is passed to every `openat(2)` call, so symbolic links at any position are rejected (`ENOTDIR`).
+
+**Behavior by parameter combination**
+
+| `follow_symlink` | `toctou` | symlink behavior |
+|:---:|:---:|---|
+| `true` | `false` | all symbolic links are followed |
+| `true` | `true` | all symbolic links are followed, TOCTOU-safe |
+| `false` | `false` | intermediate symbolic links followed; final component rejected (`ENOTDIR`) |
+| `false` | `true` | symbolic links at all positions rejected (`ENOTDIR`) |
 
 **Returns**
 
