@@ -33,15 +33,42 @@ local function test_opendir_nofollow()
     assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
-    -- test that get directory stream
-    dir, err = assert(opendir('./test/testdir/foo/../bar/..', false))
+    -- test that get directory stream with ".." traversal via real directories
+    dir, err = assert(opendir('./test/testdir/bardir/..', false))
     assert(dir, err)
     assert.is_nil(err)
     assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
-    -- test that cannot get directory stream from symlink
+    -- test that get directory stream from "."
+    dir, err = opendir('.', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from ".."
+    dir, err = opendir('..', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from "/"
+    dir, err = opendir('/', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that follows intermediate symlinks (O_NOFOLLOW is final-component only)
     dir, err = opendir('./test/testdir_symlink/bardir', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    -- test that rejects symlink as the final path component
+    dir, err = opendir('./test/testdir_symlink', false)
     assert.is_nil(dir)
     assert.equal(err.type, errno.ENOTDIR)
 
