@@ -33,8 +33,29 @@ local function test_opendir_nofollow()
     assert.match(tostring(dir), 'dir: ')
     assert(dir:closedir())
 
-    -- test that get directory stream
-    dir, err = assert(opendir('./test/testdir/foo/../bar/..', false))
+    -- test that get directory stream with ".." traversal via real directories
+    dir, err = assert(opendir('./test/testdir/bardir/..', false))
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from "."
+    dir, err = opendir('.', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from ".."
+    dir, err = opendir('..', false)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- test that get directory stream from "/"
+    dir, err = opendir('/', false)
     assert(dir, err)
     assert.is_nil(err)
     assert.match(tostring(dir), 'dir: ')

@@ -107,177 +107,78 @@ static int gc_lua(lua_State *L)
     return 0;
 }
 
-static int normalize(lua_State *L, char *path, size_t len)
+// Returns the length of the next path segment in [*cur, end).
+// Advances *cur past the segment. *seg points to the start of the segment.
+// Consecutive '/' characters are skipped. Returns 0 at end of string.
+// Does NOT interpret '.' or '..' — passes them through as-is.
+static size_t get_segment(const char **cur, const char *end, const char **seg)
 {
-    int top    = 0;
-    char *head = path;
-    char *tail = path + len;
-    char *p    = head;
+    const char *p = *cur;
 
-CHECK_FIRST:
-    switch (*p) {
-    case '/':
-ADD_SEGMENT:
-        // add segments
-        luaL_checkstack(L, 2, NULL);
-        if ((uintptr_t)head < (uintptr_t)p) {
-            lua_pushlstring(L, head, (uintptr_t)p - (uintptr_t)head);
-            top++;
-        }
-        // add '/'
-        lua_pushliteral(L, "/");
-        top++;
-
-        // skip multiple slashes
-        while (*p == '/') {
-            p++;
-        }
-        head = p;
-        if (*p != '.') {
-            break;
-        }
-
-    case '.':
-        // foud '.' segment
-        if (p[1] == '/' || p[1] == 0) {
-            p += 1;
-        }
-        // found '..' segment
-        else if (p[1] == '.' && (p[2] == '/' || p[2] == 0)) {
-            p += 2;
-            switch (top) {
-            case 1:
-                // remove previous segment if it is not slash
-                if (*lua_tostring(L, 1) != '/') {
-                    lua_settop(L, 0);
-                    top = 0;
-                }
-                break;
-
-            default:
-                // remove previous segment with trailing-slash
-                if (top > 1 && strcmp(lua_tostring(L, -2), "..") != 0) {
-                    lua_pop(L, 2);
-                    top -= 2;
-                    break;
-                }
-
-            case 0:
-                // add '..' segment
-                luaL_checkstack(L, 2, NULL);
-                lua_pushliteral(L, "..");
-                lua_pushliteral(L, "/");
-                top += 2;
-                break;
-            }
-        } else {
-            // allow segments that started with '.' character
-            break;
-        }
-
-        // skip multiple slashes
-        while (*p == '/') {
-            p++;
-        }
-        head = p;
-        goto CHECK_FIRST;
-    }
-
-    // search '/' character
-    while (*p) {
-        if (*p == '/') {
-            goto ADD_SEGMENT;
-        }
+    while (p < end && *p == '/') {
         p++;
     }
-
-    // found NULL before the end of the string
-    if (p != tail) {
-        errno = EILSEQ;
-        return -1;
+    if (p >= end) {
+        *cur = p;
+        return 0;
     }
-
-    // add last-segment
-    if ((uintptr_t)head < (uintptr_t)tail) {
-        luaL_checkstack(L, 1, NULL);
-        lua_pushlstring(L, head, (uintptr_t)tail - (uintptr_t)head);
-        top++;
-    } else if (!top) {
-        errno = EINVAL;
-        return -1;
+    *seg = p;
+    while (p < end && *p != '/') {
+        p++;
     }
-
-    // remove trailing-slash
-    if (top > 1 && *(char *)lua_tostring(L, top) == '/') {
-        lua_pop(L, 1);
-    }
-
-    // check a last segment
-    path = (char *)lua_tostring(L, -1);
-    if (strcmp(path, "/") == 0 || strcmp(path, "..") == 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return 0;
+    *cur = p;
+    return (size_t)(p - *seg);
 }
 
 static int opendir_nofollow(lua_State *L, char *path, size_t len, char *pathbuf,
                             size_t pathbuf_siz)
 {
-    int fd  = -1;
-    int top = 0;
+    const char *cur = path;
+    const char *end = path + len;
+    const char *seg = NULL;
+    size_t slen     = 0;
+    size_t plen     = 0;
+    struct stat buf = {0};
 
-    // check path length
+    if (len == 0) {
+        errno = EINVAL;
+        return -1;
+    }
     if (len > pathbuf_siz) {
         errno = ENAMETOOLONG;
         return -1;
     }
-    // normalize a path
-    path      = memcpy(pathbuf, path, len);
-    path[len] = 0;
-    lua_settop(L, 0);
-    if (normalize(L, path, len) != 0) {
-        return -1;
+
+    // absolute path: seed pathbuf with "/"
+    if (path[0] == '/') {
+        pathbuf[0] = '/';
+        plen       = 1;
     }
-    top = lua_gettop(L);
 
-    // verify the existence of each path segment
-    len = 0;
-    for (int idx = 1; idx <= top; idx++) {
-        size_t slen     = 0;
-        const char *seg = lua_tolstring(L, idx, &slen);
-        struct stat buf = {0};
-
-        memcpy(path + len, seg, slen);
-        len += slen;
-        path[len] = 0;
-        if (idx != top) {
-            switch (slen) {
-            case 2:
-                // ignore '.' and '..' segment
-                if (seg[0] == '.' && seg[2] == '.') {
-                    continue;
-                }
-                break;
-            case 1:
-                if (*seg == '/') {
-                    continue;
-                }
-            }
+    while ((slen = get_segment(&cur, end, &seg)) > 0) {
+        // add separator between pathbuf content and next segment if needed
+        if (plen > 0 && pathbuf[plen - 1] != '/') {
+            pathbuf[plen++] = '/';
         }
+        memcpy(pathbuf + plen, seg, slen);
+        plen += slen;
+        pathbuf[plen] = 0;
 
-        if (lstat(path, &buf) != 0) {
+        if (lstat(pathbuf, &buf) != 0) {
             return -1;
         } else if (!S_ISDIR(buf.st_mode)) {
-            // non directory exists
             errno = ENOTDIR;
             return -1;
         }
     }
 
+    if (plen == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
     lua_settop(L, 0);
-    fd = open(path, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    int fd = open(pathbuf, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
     if (fd != -1) {
         DIR **dir = lua_newuserdata(L, sizeof(DIR *));
         if ((*dir = fdopendir(fd))) {
@@ -360,5 +261,6 @@ LUALIB_API int luaopen_opendir(lua_State *L)
     // upvalue 2: path buffer (held by closure until state closes)
     lua_newuserdata(L, pathbuf_siz + 1);
     lua_pushcclosure(L, opendir_lua, 2);
+
     return 1;
 }
