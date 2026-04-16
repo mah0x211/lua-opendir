@@ -73,13 +73,85 @@ local function test_opendir_nofollow()
     assert.equal(err.type, errno.ENOTDIR)
 
     -- test that return ENAMETOOLONG error
-    dir, err = opendir(string.rep('x', 4096), false)
+    dir, err = opendir(string.rep('x', 65536), false)
     assert.is_nil(dir)
     assert.equal(err.type, errno.ENAMETOOLONG)
 
     -- test that throws an error
     err = assert.throws(opendir, './test/testdir', {})
     assert.match(err, '#2 .+ [(]boolean expected', false)
+end
+
+local function test_opendir_toctou()
+    -- follow_symlink=true, toctou=true: basic directory
+    local dir, err = opendir('./test/testdir', true, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert.match(tostring(dir), 'dir: ')
+    assert(dir:closedir())
+
+    -- follow_symlink=true, toctou=true: follow intermediate symlink
+    dir, err = opendir('./test/testdir_symlink/bardir', true, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    -- follow_symlink=true, toctou=true: ENAMETOOLONG
+    dir, err = opendir(string.rep('x', 65536), true, true)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.ENAMETOOLONG)
+
+    -- follow_symlink=false, toctou=true: basic directory
+    dir, err = opendir('./test/testdir', false, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    -- follow_symlink=false, toctou=true: ".", "..", "/"
+    dir, err = opendir('.', false, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    dir, err = opendir('..', false, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    dir, err = opendir('/', false, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    -- follow_symlink=false, toctou=true: ".." traversal via real directory
+    dir, err = opendir('./test/testdir/bardir/..', false, true)
+    assert(dir, err)
+    assert.is_nil(err)
+    assert(dir:closedir())
+
+    -- follow_symlink=false, toctou=true: reject symlink at intermediate position
+    dir, err = opendir('./test/testdir_symlink/bardir', false, true)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.ENOTDIR)
+
+    -- follow_symlink=false, toctou=true: ENAMETOOLONG
+    dir, err = opendir(string.rep('x', 65536), false, true)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.ENAMETOOLONG)
+
+    -- follow_symlink=true, toctou=true: EINVAL on empty path
+    dir, err = opendir('', true, true)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.EINVAL)
+
+    -- follow_symlink=false, toctou=true: EINVAL on empty path
+    dir, err = opendir('', false, true)
+    assert.is_nil(dir)
+    assert.equal(err.type, errno.EINVAL)
+
+    -- test that throws an error on invalid third argument
+    err = assert.throws(opendir, './test/testdir', true, {})
+    assert.match(err, '#3 .+ [(]boolean expected', false)
 end
 
 local function test_closedir()
@@ -158,6 +230,7 @@ end
 for _, fn in ipairs({
     test_opendir,
     test_opendir_nofollow,
+    test_opendir_toctou,
     test_closedir,
     test_readdir,
     test_rewinddir,
