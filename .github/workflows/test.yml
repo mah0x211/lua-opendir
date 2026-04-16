@@ -49,7 +49,7 @@ jobs:
     -
       name: Install
       run: |
-        luarocks make OPENDIR_COVERAGE=1
+        OPENDIR_COVERAGE=1 luarocks make
     -
       name: Install Tools
       run: |
