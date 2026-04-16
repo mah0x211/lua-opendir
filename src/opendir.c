@@ -23,9 +23,6 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
-#include <string.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 // lua
@@ -107,124 +104,39 @@ static int gc_lua(lua_State *L)
     return 0;
 }
 
-// Returns the length of the next path segment in [*cur, end).
-// Advances *cur past the segment. *seg points to the start of the segment.
-// Consecutive '/' characters are skipped. Returns 0 at end of string.
-// Does NOT interpret '.' or '..' — passes them through as-is.
-static size_t get_segment(const char **cur, const char *end, const char **seg)
-{
-    const char *p = *cur;
-
-    while (p < end && *p == '/') {
-        p++;
-    }
-    if (p >= end) {
-        *cur = p;
-        return 0;
-    }
-    *seg = p;
-    while (p < end && *p != '/') {
-        p++;
-    }
-    *cur = p;
-    return (size_t)(p - *seg);
-}
-
-static int opendir_nofollow(lua_State *L, char *path, size_t len, char *pathbuf,
-                            size_t pathbuf_siz)
-{
-    const char *cur = path;
-    const char *end = path + len;
-    const char *seg = NULL;
-    size_t slen     = 0;
-    size_t plen     = 0;
-    struct stat buf = {0};
-
-    if (len == 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (len > pathbuf_siz) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-
-    // absolute path: seed pathbuf with "/"
-    if (path[0] == '/') {
-        pathbuf[0] = '/';
-        plen       = 1;
-    }
-
-    while ((slen = get_segment(&cur, end, &seg)) > 0) {
-        // add separator between pathbuf content and next segment if needed
-        if (plen > 0 && pathbuf[plen - 1] != '/') {
-            pathbuf[plen++] = '/';
-        }
-        memcpy(pathbuf + plen, seg, slen);
-        plen += slen;
-        pathbuf[plen] = 0;
-
-        if (lstat(pathbuf, &buf) != 0) {
-            return -1;
-        } else if (!S_ISDIR(buf.st_mode)) {
-            errno = ENOTDIR;
-            return -1;
-        }
-    }
-
-    if (plen == 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    lua_settop(L, 0);
-    int fd = open(pathbuf, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd != -1) {
-        DIR **dir = lua_newuserdata(L, sizeof(DIR *));
-        if ((*dir = fdopendir(fd))) {
-            lauxh_setmetatable(L, DIR_MT);
-            return 0;
-        }
-        close(fd);
-    }
-    return -1;
-}
-
-static int opendir_follow(lua_State *L, const char *path)
-{
-    DIR **dir = lua_newuserdata(L, sizeof(DIR *));
-
-    if ((*dir = opendir(path))) {
-        luaL_getmetatable(L, DIR_MT);
-        lua_setmetatable(L, -2);
-        return 0;
-    }
-    return -1;
-}
-
 static int opendir_lua(lua_State *L)
 {
     size_t len         = 0;
     const char *path   = lauxh_checklstring(L, 1, &len);
     int follow_symlink = lauxh_optboolean(L, 2, 1);
-    size_t pathbuf_siz = (size_t)lua_tointeger(L, lua_upvalueindex(1));
-    char *pathbuf      = lua_touserdata(L, lua_upvalueindex(2));
 
-    if (follow_symlink ?
-            opendir_follow(L, path) :
-            opendir_nofollow(L, (char *)path, len, pathbuf, pathbuf_siz)) {
-        lua_pushnil(L);
-        lua_errno_new(L, errno, "opendir");
-        return 2;
+    if (follow_symlink) {
+        DIR **dir = lua_newuserdata(L, sizeof(DIR *));
+        if ((*dir = opendir(path))) {
+            luaL_getmetatable(L, DIR_MT);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+    } else {
+        // POSIX: O_NOFOLLOW applies to the final path component only
+        int fd = open(path, O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+        if (fd != -1) {
+            DIR **dir = lua_newuserdata(L, sizeof(DIR *));
+            if ((*dir = fdopendir(fd))) {
+                lauxh_setmetatable(L, DIR_MT);
+                return 1;
+            }
+            close(fd);
+        }
     }
-    return 1;
+
+    lua_pushnil(L);
+    lua_errno_new(L, errno, "opendir");
+    return 2;
 }
 
 LUALIB_API int luaopen_opendir(lua_State *L)
 {
-    long pathmax       = pathconf(".", _PC_PATH_MAX);
-    size_t pathbuf_siz = (pathmax != -1) ? (size_t)pathmax : PATH_MAX;
-
     lua_errno_loadlib(L);
 
     // create metatable
@@ -256,11 +168,7 @@ LUALIB_API int luaopen_opendir(lua_State *L)
         lua_pop(L, 1);
     }
 
-    // upvalue 1: path buffer size
-    lua_pushinteger(L, (lua_Integer)pathbuf_siz);
-    // upvalue 2: path buffer (held by closure until state closes)
-    lua_newuserdata(L, pathbuf_siz + 1);
-    lua_pushcclosure(L, opendir_lua, 2);
+    lua_pushcfunction(L, opendir_lua);
 
     return 1;
 }
