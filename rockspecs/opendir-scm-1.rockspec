@@ -16,7 +16,7 @@ dependencies = {
     "lauxhlib >= 0.1.0",
 }
 build_dependencies = {
-    "luarocks-build-hooks >= 0.2.0",
+    "luarocks-build-hooks >= 0.7.0",
 }
 build = {
     type = 'hooks',
@@ -32,6 +32,12 @@ build = {
         },
     },
     modules = {
-        ["opendir"] = "src/opendir.c",
+        ["opendir"] = {
+            sources = "src/opendir.c",
+            incdirs = {
+                "$(DEP_ERRNO_INCDIR)",
+                "$(DEP_LAUXHLIB_INCDIR)",
+            },
+        },
     },
 }
