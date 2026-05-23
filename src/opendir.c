@@ -28,7 +28,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 // lua
-#include <lua_errno.h>
+#include <lauxlib.h>
+#include <lua.h>
+// external libraries
+#include "lauxhlib.h"
+#include "lua_errno.h"
 
 #define DIR_MT "dir"
 
